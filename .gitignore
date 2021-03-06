@@ -1,0 +1,8 @@
+# exclude created graphs and image files
+*.gv
+*.pdf
+*.txt
+*.png
+
+# exclude .swp files
+*.swp
