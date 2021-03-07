@@ -25,14 +25,6 @@ def extract_deps(app_root_path, type_var='(P|S)'):
                      if re.search(reg_filt, l)]
     return deps_list
 
-# class SuppPkg:
-    # '''
-    # Class used to reference support pkg nodes
-    # '''
-    # def __init__(self, name):
-        # self.name = name
-        # self.versions = []
-        # self.nodes
 class SuppNode:
     '''
     Class used to store attributes of a "support module" type node
@@ -65,6 +57,9 @@ class SuppNode:
         return '\n'.join([name_str, vers_str, deps_str])
 
     def get_versions(self):
+        '''
+        Get all the versions of the node
+        '''
         supp_path = '/'.join([PRODSUPP,self.name])
         if not(os.path.isdir(supp_path)):
             raise IOError("Directory " + full_path +" doesn't exist")
@@ -72,9 +67,42 @@ class SuppNode:
                          for v in os.listdir(supp_path)]
 
     def get_prod_deps(self):
+        '''
+        Get the dependecies for each version
+        '''
         for vers in self.versions:
             vers_path = '/'.join([PRODSUPP, vers])
             self.prod_deps[vers] = extract_deps(vers_path, '(P|S)')
+
+class GemNode:
+    '''
+    Class used to store attributes of a "<epics-app>/<version>" type node
+    '''
+
+    def __init__(self, name):
+        self.name = name
+        self.prod_deps = []
+        self.tier = 0 # By default all nodes are tier 0
+
+    def __str__(self):
+        '''
+        :return: string representation of SuppNode object
+        '''
+        name_str = '===== Node: {} ====='.format(self.name)
+        tier_str = 'Node Tier Level: {}'.format(self.tier)
+        if not(self.prod_deps):
+            return '\n'.join([name_str, tier_str])
+        deps_head = 'Node dependencies:'
+        deps = '\n'.join(self.prod_deps)
+        deps_str = '\n'.join([deps_head,deps])
+        return '\n'.join([name_str, tier_str, deps_str])
+
+    def get_prod_deps(self):
+        '''
+        Get the list of dependencies for the node
+        '''
+        node_path = '/'.join([PRODSUPP, self.name])
+        self.prod_deps = extract_deps(node_path, '(P|S)')
 
 if __name__ == '__main__':
     name = 'busy/1-7-1'
