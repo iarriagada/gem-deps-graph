@@ -3,9 +3,9 @@
 import os
 import re
 import sys
-from graphviz import Digraph
 
 PRODSUPP = '/gem_sw/prod/R3.14.12.8/support'
+PRODIOC = '/gem_sw/prod/R3.14.12.8/ioc'
 
 def extract_deps(app_root_path, type_var='(P|S)'):
     '''
@@ -97,11 +97,11 @@ class GemNode:
         deps_str = '\n'.join([deps_head,deps])
         return '\n'.join([name_str, tier_str, deps_str])
 
-    def get_prod_deps(self):
+    def get_prod_deps(self, node_root):
         '''
         Get the list of dependencies for the node
         '''
-        node_path = '/'.join([PRODSUPP, self.name])
+        node_path = '/'.join([node_root, self.name])
         self.prod_deps = extract_deps(node_path, '(P|S)')
 
 if __name__ == '__main__':

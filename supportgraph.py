@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
 import os
-import supportnode as sn
-from supportnode import SuppNode, GemNode, PRODSUPP
+from gemnode import SuppNode, GemNode, PRODSUPP
 
 class SuppGraph:
     '''
     Class that generates and stores all graphs of supp pkgs dependencies
     '''
     def __init__(self):
-        self.scope = 'all'
-        self.seed_node = ''
         self.nodes = {}
 
     def gen_ranked(self):
@@ -26,7 +23,7 @@ class SuppGraph:
                     continue
                 # Generate node
                 self.nodes[node] = GemNode(node)
-                self.nodes[node].get_prod_deps()
+                self.nodes[node].get_prod_deps(PRODSUPP)
                 # If node has no dependencies, skip to next node. This is done
                 # in order to catch the Tier 0 nodes
                 if not(self.nodes[node].prod_deps):
@@ -43,7 +40,7 @@ class SuppGraph:
             for v in os.listdir(sp_dir):
                 node = '/'.join([sp,v])
                 self.nodes[node] = GemNode(node)
-                self.nodes[node].get_prod_deps()
+                self.nodes[node].get_prod_deps(PRODSUPP)
 
     def set_tiers(self, dependant):
         '''
@@ -57,29 +54,44 @@ class SuppGraph:
             dependant_tier = self.nodes[dep].tier + 1
             if self.nodes[dependant].tier < dependant_tier:
                 self.nodes[dependant].tier = dependant_tier
+        # Checked all dependencies in the loop, unwind
+        return
 
     def _gen_ranked_branch(self, dependant):
         '''
         Internal recursive method that generates a graph branch starting with
-        'dependant', setting the tier for each node as it's generated
+        'dependant', setting the tier level for each node as it's generated
         '''
-        # Generate node and its dependencies
-        self.nodes[dependant] = GemNode(dependant)
-        self.nodes[dependant].get_prod_deps()
         # If no dependencies, set tier level to 1 and start unwinding recursion
         if not(self.nodes[dependant].prod_deps):
             self.nodes[dependant].tier = 1
             return
         # Loop that traverses all dependecies
         for dep in self.nodes[dependant].prod_deps:
-            # Start traveling down until level 1 node is reached
+            # If dep node doesn't exist, create it
+            if not(dep in self.nodes.keys()):
+                self.nodes[dep] = GemNode(dep)
+                self.nodes[dep].get_prod_deps(PRODSUPP)
+            # If dep node tier level > 0, it means it has been visited.
+            # Continue with next dep
+            if self.nodes[dep].tier > 0:
+                # Calculate new tier level for dependant
+                dependant_tier = self.nodes[dep].tier + 1
+                # Assign new tier level only if higher than current level
+                if self.nodes[dependant].tier < dependant_tier:
+                    self.nodes[dependant].tier = dependant_tier
+                continue
+            # Start traveling down until level 1 or visited node is reached
             self._gen_ranked_branch(dep)
-            # Returning here means a Tier 1 node was reached. Calculate new
-            # dependant node tier level
+            # Returning here means a Tier 1 node was reached or all
+            # dependencies where checked.
+            # Calculate new dependant node tier level
             dependant_tier = self.nodes[dep].tier + 1
             # Assign new tier level only if higher than current level
             if self.nodes[dependant].tier < dependant_tier:
                 self.nodes[dependant].tier = dependant_tier
+        # Checked all dependencies in the loop, unwind
+        return
 
     def print_nodes(self):
         '''
@@ -87,6 +99,12 @@ class SuppGraph:
         '''
         for n in self.nodes:
             print(self.nodes[n])
+
+    def print_node(self, node_name):
+        '''
+        Print single node
+        '''
+        print(self.nodes[node_name])
 
 if __name__ == '__main__':
     graph = SuppGraph()
