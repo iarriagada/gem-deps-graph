@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from gemnode import SuppNode, GemNode, PRODSUPP
+from gemnode import SuppNode, GemNode, PRODSUPP, PRODIOC, WORKIOC
 
 class SuppGraph:
     '''
@@ -41,6 +41,40 @@ class SuppGraph:
                 node = '/'.join([sp,v])
                 self.nodes[node] = GemNode(node)
                 self.nodes[node].get_prod_deps(PRODSUPP)
+
+    def gen_ioc_ranked(self, ioc_name):
+        '''
+        Generate graph for a branch spawning from an ioc
+        '''
+        self.nodes[ioc_name] = GemNode(ioc_name)
+        self.nodes[ioc_name].get_prod_deps(WORKIOC)
+        if not(self.nodes[ioc_name].prod_deps):
+            raise UserWarning('IOC has no dependencies... kinda sus')
+        for ioc_d in self.nodes[ioc_name].prod_deps:
+            if not(ioc_d in self.nodes.keys()):
+                self.nodes[ioc_d] = GemNode(ioc_d)
+                self.nodes[ioc_d].get_prod_deps(PRODSUPP)
+            if not(self.nodes[ioc_d].prod_deps):
+                continue
+            self._gen_ranked_branch(ioc_d)
+        max_tier = max([self.nodes[n].tier for n in self.nodes])
+        self.nodes[ioc_name].tier = max_tier + 1
+
+    def gen_ioc_diag(self, ioc_name):
+        '''
+        Generate graph for a branch spawning from an ioc
+        '''
+        ioc_node = GemNode(ioc_name)
+        ioc_node.get_prod_deps(WORKIOC)
+        if not(ioc_node.prod_deps):
+            raise UserWarning('IOC has no dependencies... kinda sus')
+        for ioc_d in ioc_node.prod_deps:
+            if not(ioc_d in self.nodes.keys()):
+                self.nodes[ioc_d] = GemNode(ioc_d)
+                self.nodes[ioc_d].get_prod_deps(PRODSUPP)
+            if not(self.nodes[ioc_d].prod_deps):
+                continue
+            self._gen_ranked_branch(ioc_d)
 
     def set_tiers(self, dependant):
         '''
@@ -115,7 +149,8 @@ if __name__ == '__main__':
     # graph.set_tiers('tcslib/1-0-23')
 
     # Test generating graph and tiers all at once
-    graph.gen_ranked()
+    # graph.gen_ranked()
+    graph.gen_ioc_ranked('gis/cwrap-chans')
 
     graph.print_nodes()
     # graph.tier_sorter()

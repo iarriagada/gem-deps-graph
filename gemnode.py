@@ -4,8 +4,11 @@ import os
 import re
 import sys
 
-PRODSUPP = '/gem_sw/prod/R3.14.12.8/support'
-PRODIOC = '/gem_sw/prod/R3.14.12.8/ioc'
+EPICS_PROD_TOP = '/gem_sw/prod/R3.14.12.8'
+EPICS_WORK_TOP = '/gem_sw/work/R3.14.12.8'
+PRODSUPP = '/'.join([EPICS_PROD_TOP, 'support'])
+PRODIOC = '/'.join([EPICS_PROD_TOP, 'ioc'])
+WORKIOC = '/'.join([EPICS_WORK_TOP, 'ioc'])
 
 def extract_deps(app_root_path, type_var='(P|S)'):
     '''
