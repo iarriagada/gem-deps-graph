@@ -87,11 +87,15 @@ def sort_noioc_rank(diag, graph):
         sg.attr(rank='source')
         for n in tiers[0]:
             sg.node(n.name)
-            sg.node_attr.update(style='filled', color=color_gen())
+            sg.node_attr.update(shape='box', style='rounded, filled',
+                                fontname='consolas', fontsize='10',
+                                color=color_gen())
     for t in range(1,max_tier+1):
         with diag.subgraph() as sg:
             sg.attr(rank='same')
-            sg.node_attr.update(style='filled', color=color_gen())
+            sg.node_attr.update(shape='box', style='rounded, filled',
+                                fontname='consolas', fontsize='10',
+                                color=color_gen())
             for n in tiers[t]:
                 sg.node(n.name)
 
@@ -107,18 +111,20 @@ def sort_noioc_rank(diag, graph):
     return diag
 
 if __name__ == '__main__':
+    sys_name = 'ag/1-13'
+    # sys_name = 'tcs/lst_bug'
     ioc_diag = graphviz.Digraph(filename='ioc_graph.gv', format='svg')
     ioc_graph = SuppGraph()
-    ioc_graph.gen_ioc_diag('tcs/lst_bug')
+    # ioc_graph.gen_ioc_diag('tcs/lst_bug')
     # ioc_graph.gen_ioc_diag('ecs/1-0-3')
     # ioc_graph.gen_ioc_diag('mcs/cp')
-    # ioc_graph.gen_ioc_diag('ag/1-13')
+    ioc_graph.gen_ioc_diag(sys_name)
     # ioc_graph.gen_ioc_ranked('tcs/lst_bug')
     # ioc_graph.gen_ioc_ranked('ecs/1-0-3')
     # ioc_graph.gen_ioc_ranked('ag/1-13')
     ioc_graph.print_nodes()
     # ioc_diag = sort_rank(ioc_diag, ioc_graph)
     ioc_diag = sort_noioc_rank(ioc_diag, ioc_graph)
-    ioc_diag.attr(label='Dependencies for tcs/lst_bug', fontsize='18')
+    ioc_diag.attr(label='Dependencies for {}'.format(sys_name), fontsize='18')
     ioc_diag.attr(ranksep='1.0')
     ioc_diag.view()

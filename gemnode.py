@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import ade.versions as pgadev
 
 EPICS_PROD_TOP = '/gem_sw/prod/R3.14.12.8'
 EPICS_WORK_TOP = '/gem_sw/work/R3.14.12.8'
@@ -10,7 +11,10 @@ PRODSUPP = '/'.join([EPICS_PROD_TOP, 'support'])
 PRODIOC = '/'.join([EPICS_PROD_TOP, 'ioc'])
 WORKIOC = '/'.join([EPICS_WORK_TOP, 'ioc'])
 
-def extract_deps(app_root_path, type_var='(P|S)'):
+def get_deps(release_lines):
+    pass
+
+def get_deps_dir(app_root_path, type_var='(P|S)'):
     '''
     Extract dependencies list from configure/RELEASE file
     '''
@@ -75,7 +79,7 @@ class SuppNode:
         '''
         for vers in self.versions:
             vers_path = '/'.join([PRODSUPP, vers])
-            self.prod_deps[vers] = extract_deps(vers_path, '(P|S)')
+            self.prod_deps[vers] = get_deps_dir(vers_path, '(P|S)')
 
 class GemNode:
     '''
@@ -105,12 +109,12 @@ class GemNode:
         Get the list of dependencies for the node
         '''
         node_path = '/'.join([node_root, self.name])
-        self.prod_deps = extract_deps(node_path, '(P|S)')
+        self.prod_deps = get_deps_dir(node_path, '(P|S)')
 
 if __name__ == '__main__':
     name = 'busy/1-7-1'
     full_path = PRODSUPP + '/' + name
-    print(extract_deps(full_path))
+    print(get_deps_dir(full_path))
     # supp_name = 'tcslib'
     # example = SuppNode(supp_name)
     # print(example)
