@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 
 import os
+import sys
+import subprocess as sp
 from gemnode import SuppNode, GemNode, PRODSUPP, PRODIOC, WORKIOC
+
+SVN_ROOT = 'http://sbfsvn02/gemini-sw/gem'
+SVN_PRODSUPP = SVN_ROOT + '/release/support'
+SVN_PRODIOC = SVN_ROOT + '/release/ioc'
+RELEASE_LOC = 'configure/RELEASE'
 
 class SuppGraph:
     '''
@@ -9,6 +16,27 @@ class SuppGraph:
     '''
     def __init__(self):
         self.nodes = {}
+
+    @staticmethod
+    def _get_svn_rel(sys_name):
+        '''
+        Generate an array with the contents of configure/RELEASE, via SVN
+        '''
+
+        svn_ref = '/'.join([SVN_PRODSUPP, sys_name, RELEASE_LOC])
+        svn_cmd = 'svn cat '
+        svn_cat = sp.run([svn_cmd+svn_ref], shell=True,
+                         stdout=sp.PIPE, stderr=sp.PIPE,
+                         encoding='utf-8')
+        if svn_cat.stderr:
+            for l in svn_cat.stderr.split('\n')
+            print(l)
+            sys.exit()
+        return svn_cat.stdout.split('\n')
+
+    def _get_loc_rel(sys_name):
+        # TODO: Get this from local directories
+        pass
 
     def gen_ranked(self):
         '''
@@ -31,17 +59,6 @@ class SuppGraph:
                 # If node has dependencies, generate the whole branch
                 self._gen_ranked_branch(node)
 
-    def gen_unranked(self):
-        '''
-        Spawn all nodes without ranking them
-        '''
-        for sp in os.listdir(PRODSUPP):
-            sp_dir = '/'.join([PRODSUPP,sp])
-            for v in os.listdir(sp_dir):
-                node = '/'.join([sp,v])
-                self.nodes[node] = GemNode(node)
-                self.nodes[node].get_prod_deps(PRODSUPP)
-
     def gen_ioc_ranked(self, ioc_name):
         '''
         Generate graph for a branch spawning from an ioc
@@ -62,7 +79,7 @@ class SuppGraph:
 
     def gen_ioc_diag(self, ioc_name):
         '''
-        Generate graph for a branch spawning from an ioc
+        Generate interdependency graph for the support packages of an ioc
         '''
         ioc_node = GemNode(ioc_name)
         ioc_node.get_prod_deps(WORKIOC)
@@ -75,6 +92,17 @@ class SuppGraph:
             if not(self.nodes[ioc_d].prod_deps):
                 continue
             self._gen_ranked_branch(ioc_d)
+
+    def gen_unranked(self):
+        '''
+        Spawn all nodes without ranking them
+        '''
+        for sp in os.listdir(PRODSUPP):
+            sp_dir = '/'.join([PRODSUPP,sp])
+            for v in os.listdir(sp_dir):
+                node = '/'.join([sp,v])
+                self.nodes[node] = GemNode(node)
+                self.nodes[node].get_prod_deps(PRODSUPP)
 
     def set_tiers(self, dependant):
         '''
@@ -96,6 +124,9 @@ class SuppGraph:
         Internal recursive method that generates a graph branch starting with
         'dependant', setting the tier level for each node as it's generated
         '''
+        # If node tier level > 0, it means it has been visited.
+        if self.nodes[dependant].tier > 0:
+            return
         # If no dependencies, set tier level to 1 and start unwinding recursion
         if not(self.nodes[dependant].prod_deps):
             self.nodes[dependant].tier = 1
@@ -106,15 +137,6 @@ class SuppGraph:
             if not(dep in self.nodes.keys()):
                 self.nodes[dep] = GemNode(dep)
                 self.nodes[dep].get_prod_deps(PRODSUPP)
-            # If dep node tier level > 0, it means it has been visited.
-            # Continue with next dep
-            if self.nodes[dep].tier > 0:
-                # Calculate new tier level for dependant
-                dependant_tier = self.nodes[dep].tier + 1
-                # Assign new tier level only if higher than current level
-                if self.nodes[dependant].tier < dependant_tier:
-                    self.nodes[dependant].tier = dependant_tier
-                continue
             # Start traveling down until level 1 or visited node is reached
             self._gen_ranked_branch(dep)
             # Returning here means a Tier 1 node was reached or all
