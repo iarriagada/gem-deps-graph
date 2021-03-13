@@ -5,38 +5,14 @@ import sys
 import subprocess as sp
 from gemnode import SuppNode, GemNode, PRODSUPP, PRODIOC, WORKIOC
 
-SVN_ROOT = 'http://sbfsvn02/gemini-sw/gem'
-SVN_PRODSUPP = SVN_ROOT + '/release/support'
-SVN_PRODIOC = SVN_ROOT + '/release/ioc'
-RELEASE_LOC = 'configure/RELEASE'
-
 class SuppGraph:
     '''
     Class that generates and stores all graphs of supp pkgs dependencies
     '''
-    def __init__(self):
-        self.nodes = {}
-
-    @staticmethod
-    def _get_svn_rel(sys_name):
-        '''
-        Generate an array with the contents of configure/RELEASE, via SVN
-        '''
-
-        svn_ref = '/'.join([SVN_PRODSUPP, sys_name, RELEASE_LOC])
-        svn_cmd = 'svn cat '
-        svn_cat = sp.run([svn_cmd+svn_ref], shell=True,
-                         stdout=sp.PIPE, stderr=sp.PIPE,
-                         encoding='utf-8')
-        if svn_cat.stderr:
-            for l in svn_cat.stderr.split('\n')
-            print(l)
-            sys.exit()
-        return svn_cat.stdout.split('\n')
-
-    def _get_loc_rel(sys_name):
-        # TODO: Get this from local directories
-        pass
+    def __init__(self, source='local'):
+        self.supp_nodes = {}
+        self.ioc_nodes = {}
+        self.source = source
 
     def gen_ranked(self):
         '''
@@ -47,51 +23,70 @@ class SuppGraph:
             for v in os.listdir(sp_dir):
                 node = '/'.join([sp,v])
                 # Skip to next node if it exists in the list
-                if node in self.nodes.keys():
+                if node in self.supp_nodes.keys():
                     continue
                 # Generate node
-                self.nodes[node] = GemNode(node)
-                self.nodes[node].get_prod_deps(PRODSUPP)
+                self.supp_nodes[node] = GemNode(node)
+                self.supp_nodes[node].get_prod_deps(PRODSUPP)
                 # If node has no dependencies, skip to next node. This is done
                 # in order to catch the Tier 0 nodes
-                if not(self.nodes[node].prod_deps):
+                if not(self.supp_nodes[node].prod_deps):
                     continue
                 # If node has dependencies, generate the whole branch
-                self._gen_ranked_branch(node)
+                self._gen_branches(node)
 
     def gen_ioc_ranked(self, ioc_name):
         '''
         Generate graph for a branch spawning from an ioc
         '''
-        self.nodes[ioc_name] = GemNode(ioc_name)
-        self.nodes[ioc_name].get_prod_deps(WORKIOC)
-        if not(self.nodes[ioc_name].prod_deps):
+        self.supp_nodes[ioc_name] = GemNode(ioc_name)
+        self.supp_nodes[ioc_name].get_prod_deps(WORKIOC)
+        if not(self.supp_nodes[ioc_name].prod_deps):
             raise UserWarning('IOC has no dependencies... kinda sus')
-        for ioc_d in self.nodes[ioc_name].prod_deps:
-            if not(ioc_d in self.nodes.keys()):
-                self.nodes[ioc_d] = GemNode(ioc_d)
-                self.nodes[ioc_d].get_prod_deps(PRODSUPP)
-            if not(self.nodes[ioc_d].prod_deps):
+        for ioc_d in self.supp_nodes[ioc_name].prod_deps:
+            if not(ioc_d in self.supp_nodes.keys()):
+                self.supp_nodes[ioc_d] = GemNode(ioc_d)
+                self.supp_nodes[ioc_d].get_prod_deps(PRODSUPP)
+            if not(self.supp_nodes[ioc_d].prod_deps):
                 continue
-            self._gen_ranked_branch(ioc_d)
-        max_tier = max([self.nodes[n].tier for n in self.nodes])
-        self.nodes[ioc_name].tier = max_tier + 1
+            self._gen_branches(ioc_d)
+        max_tier = max([self.supp_nodes[n].tier for n in self.supp_nodes])
+        self.supp_nodes[ioc_name].tier = max_tier + 1
 
     def gen_ioc_diag(self, ioc_name):
         '''
         Generate interdependency graph for the support packages of an ioc
         '''
-        ioc_node = GemNode(ioc_name)
-        ioc_node.get_prod_deps(WORKIOC)
-        if not(ioc_node.prod_deps):
+        i = 1
+        self.ioc_nodes[ioc_name] = GemNode(ioc_name, 'ioc')
+        self.ioc_nodes[ioc_name].get_prod_deps(WORKIOC)
+        # self.ioc_nodes[ioc_name].get_deps(self.source)
+        if not(self.ioc_nodes[ioc_name].prod_deps):
             raise UserWarning('IOC has no dependencies... kinda sus')
-        for ioc_d in ioc_node.prod_deps:
-            if not(ioc_d in self.nodes.keys()):
-                self.nodes[ioc_d] = GemNode(ioc_d)
-                self.nodes[ioc_d].get_prod_deps(PRODSUPP)
-            if not(self.nodes[ioc_d].prod_deps):
+        for ioc_d in self.ioc_nodes[ioc_name].prod_deps:
+            nu_deps = len(self.ioc_nodes[ioc_name].prod_deps)
+            sys.stdout.write('\rGenerating dependency ({1:2d}/{0:2d})'.format(nu_deps, i))
+            i += 1
+            if not(ioc_d in self.supp_nodes.keys()):
+                self.supp_nodes[ioc_d] = GemNode(ioc_d)
+                self.supp_nodes[ioc_d].get_deps(self.source)
+                # self.supp_nodes[ioc_d].get_prod_deps(PRODSUPP)
+            if not(self.supp_nodes[ioc_d].prod_deps):
                 continue
-            self._gen_ranked_branch(ioc_d)
+            self._gen_branches(ioc_d)
+        # sys.stdout.write('\rGenerating dependency({0:2d}/{0:2d}) Done!\n'.format(nu_deps))
+        sys.stdout.write('\nDone!\n')
+        max_tier = max([self.supp_nodes[n].tier for n in self.supp_nodes])
+        for i in self.ioc_nodes:
+            self.ioc_nodes[i].tier = max_tier + 1
+
+    def gen_supp_diag(self, supp_name):
+        '''
+        Generate dependency graph for a support module
+        '''
+        self.supp_nodes[supp_name] = GemNode(supp_name)
+        self.supp_nodes[supp_name].get_deps(self.source)
+        self._gen_branches(supp_name)
 
     def gen_unranked(self):
         '''
@@ -101,51 +96,51 @@ class SuppGraph:
             sp_dir = '/'.join([PRODSUPP,sp])
             for v in os.listdir(sp_dir):
                 node = '/'.join([sp,v])
-                self.nodes[node] = GemNode(node)
-                self.nodes[node].get_prod_deps(PRODSUPP)
+                self.supp_nodes[node] = GemNode(node)
+                self.supp_nodes[node].get_prod_deps(PRODSUPP)
 
     def set_tiers(self, dependant):
         '''
         Set tiers for a branch that ends in the 'dependant' node
         '''
-        if not(self.nodes[dependant].prod_deps):
-            self.nodes[dependant].tier = 1
+        if not(self.supp_nodes[dependant].prod_deps):
+            self.supp_nodes[dependant].tier = 1
             return
-        for dep in self.nodes[dependant].prod_deps:
+        for dep in self.supp_nodes[dependant].prod_deps:
             self._set_tiers(dep)
-            dependant_tier = self.nodes[dep].tier + 1
-            if self.nodes[dependant].tier < dependant_tier:
-                self.nodes[dependant].tier = dependant_tier
+            dependant_tier = self.supp_nodes[dep].tier + 1
+            if self.supp_nodes[dependant].tier < dependant_tier:
+                self.supp_nodes[dependant].tier = dependant_tier
         # Checked all dependencies in the loop, unwind
         return
 
-    def _gen_ranked_branch(self, dependant):
+    def _gen_branches(self, dependant):
         '''
-        Internal recursive method that generates a graph branch starting with
+        Recursive method that generates a graph branch starting with
         'dependant', setting the tier level for each node as it's generated
         '''
         # If node tier level > 0, it means it has been visited.
-        if self.nodes[dependant].tier > 0:
+        if self.supp_nodes[dependant].tier > 0:
             return
         # If no dependencies, set tier level to 1 and start unwinding recursion
-        if not(self.nodes[dependant].prod_deps):
-            self.nodes[dependant].tier = 1
+        if not(self.supp_nodes[dependant].prod_deps):
+            self.supp_nodes[dependant].tier = 1
             return
         # Loop that traverses all dependecies
-        for dep in self.nodes[dependant].prod_deps:
+        for dep in self.supp_nodes[dependant].prod_deps:
             # If dep node doesn't exist, create it
-            if not(dep in self.nodes.keys()):
-                self.nodes[dep] = GemNode(dep)
-                self.nodes[dep].get_prod_deps(PRODSUPP)
+            if not(dep in self.supp_nodes.keys()):
+                self.supp_nodes[dep] = GemNode(dep)
+                self.supp_nodes[dep].get_prod_deps(PRODSUPP)
             # Start traveling down until level 1 or visited node is reached
-            self._gen_ranked_branch(dep)
+            self._gen_branches(dep)
             # Returning here means a Tier 1 node was reached or all
             # dependencies where checked.
             # Calculate new dependant node tier level
-            dependant_tier = self.nodes[dep].tier + 1
+            dependant_tier = self.supp_nodes[dep].tier + 1
             # Assign new tier level only if higher than current level
-            if self.nodes[dependant].tier < dependant_tier:
-                self.nodes[dependant].tier = dependant_tier
+            if self.supp_nodes[dependant].tier < dependant_tier:
+                self.supp_nodes[dependant].tier = dependant_tier
         # Checked all dependencies in the loop, unwind
         return
 
@@ -153,14 +148,14 @@ class SuppGraph:
         '''
         Print all nodes in the graph
         '''
-        for n in self.nodes:
-            print(self.nodes[n])
+        for n in self.supp_nodes:
+            print(self.supp_nodes[n])
 
     def print_node(self, node_name):
         '''
         Print single node
         '''
-        print(self.nodes[node_name])
+        print(self.supp_nodes[node_name])
 
 if __name__ == '__main__':
     graph = SuppGraph()
