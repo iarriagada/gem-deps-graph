@@ -40,54 +40,15 @@ def extract_deps(app_root_path, type_var='(P|S)'):
                      if re.search(reg_filt, l)]
     return deps_list
 
-class SuppNode:
-    '''
-    Class used to store attributes of a "support module" type node
-    '''
-
-    def __init__(self, name):
-        self.name = name
-        self.prod_vers = ''
-        self.versions = []
-        self.prod_deps = {}
-        self.work_deps = {}
-
-    def __str__(self):
-        '''
-        :return: string representation of SuppNode object
-        '''
-        name_str = '===== name: {} ====='.format(self.name)
-        if not(self.versions):
-            return name_str
-        versions = ', '.join(self.versions)
-        vers_str = 'Versions: ' + versions
-        if not(self.prod_deps.keys()):
-            return '\n'.join([name_str, vers_str])
-        deps_list = []
-        for vers in self.versions:
-            deps_head = 'Ver {} dependencies:'.format(vers)
-            deps = '\n'.join(self.prod_deps[vers])
-            deps_list.append(deps_head + '\n' + deps)
-        deps_str = '\n'.join(deps_list)
-        return '\n'.join([name_str, vers_str, deps_str])
-
-    def get_versions(self):
-        '''
-        Get all the versions of the node
-        '''
-        supp_path = '/'.join([PRODSUPP,self.name])
-        if not(os.path.isdir(supp_path)):
-            raise IOError("Directory " + full_path +" doesn't exist")
-        self.versions = ['/'.join([self.name,v])
-                         for v in os.listdir(supp_path)]
-
-    def get_prod_deps(self):
-        '''
-        Get the dependecies for each version
-        '''
-        for vers in self.versions:
-            vers_path = '/'.join([PRODSUPP, vers])
-            self.prod_deps[vers] = extract_deps(vers_path, '(P|S)')
+def run_svn_cmd(cmd, arg):
+    cmd_exec = sp.run([cmd+arg], shell=True,
+                     stdout=sp.PIPE, stderr=sp.PIPE,
+                     encoding='utf-8')
+    # If svn command returns an error, raise OS exception. kinda harsh
+    if cmd_exec.stderr:
+        raise OSError(cmd_exec.stderr)
+    cmd_out = cmd_exec.stdout.split('\n')
+    return cmd_out
 
 class GemNode:
     '''
@@ -119,8 +80,9 @@ class GemNode:
         '''
         node_path = '/'.join([node_root, self.name])
         self.prod_deps = extract_deps(node_path, '(P|S)')
+        return
 
-    def get_deps(self, source='local'):
+    def get_deps(self, source='svn'):
         '''
         Get the list of dependencies from 'source'.
         '''
@@ -130,6 +92,7 @@ class GemNode:
         else:
             release_file = self._get_loc_rel(app_root)
         self.prod_deps = self._extract_deps(release_file)
+        return
 
     @staticmethod
     def _get_svn_rel(app_loc):
@@ -139,13 +102,7 @@ class GemNode:
         # Generate svn command to read RELEASE file
         svn_ref = '/'.join([SVN_PROD, app_loc, RELEASE_LOC])
         svn_cmd = 'svn cat '
-        svn_cat = sp.run([svn_cmd+svn_ref], shell=True,
-                         stdout=sp.PIPE, stderr=sp.PIPE,
-                         encoding='utf-8')
-        # If svn command returns an error, raise OS exception. kinda harsh
-        if svn_cat.stderr:
-            raise OSError(svn_cat.stderr)
-        rel_raw = svn_cat.stdout.split('\n')
+        rel_raw = run_svn_cmd(svn_cmd, svn_ref)
         rel_lines = [l for l in rel_raw if CMNT_FILT.search(l)]
         return rel_lines
 
@@ -177,6 +134,18 @@ class GemNode:
         deps_list = [r.split('support/')[1]
                         for l,r in proc_rel if len(r.split('support/')) > 1]
         return deps_list
+
+    @staticmethod
+    def list_supp(dir_name, source='svn'):
+        if source == 'svn':
+            path = '/'.join([SVN_PROD, dir_name])
+            svn_cmd = 'svn list '
+            svn_ls = run_svn_cmd(svn_cmd, path)
+            return [l.strip('/') for l in svn_ls if l]
+        else:
+            path = '/'.join([EPICS_PROD_TOP, dir_name])
+            os_ls = os.listdir(path)
+            return os_ls
 
 if __name__ == '__main__':
     name = 'busy/6-6-6'

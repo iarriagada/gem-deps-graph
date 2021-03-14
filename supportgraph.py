@@ -2,104 +2,125 @@
 
 import os
 import sys
+import threading
+import time
 import subprocess as sp
-from gemnode import SuppNode, GemNode, PRODSUPP, PRODIOC, WORKIOC
+from gemnode import GemNode, PRODSUPP, PRODIOC, WORKIOC
+
+def progress_mon(tot, acc, name, run_flag):
+    '''
+    Function to monitor graph generation progress
+    '''
+    print('Generating for {} from SVN'.format(name))
+    # Lambda to generate the progress bar. The '\r' character prints the
+    # message overriding the same line
+    mess = lambda x, y:'\rFetching dependencies ({1:2d}/{0:2d})'.format(x,y)
+    while run_flag[0]:
+        sys.stdout.write(mess(tot[0],acc[0]))
+        time.sleep(0.001)
+    sys.stdout.write(mess(tot[0],acc[0]))
+    sys.stdout.write('\nDone!\n')
+    # Since getting the info from svn is so slow, I don't mind adding 1 ms to
+    # the whole process
+    # Set the flag to True in order for the main thread to continue
+    run_flag[0] = True
 
 class SuppGraph:
     '''
     Class that generates and stores all graphs of supp pkgs dependencies
     '''
-    def __init__(self, source='local'):
+    def __init__(self, source='svn'):
         self.supp_nodes = {}
         self.ioc_nodes = {}
         self.source = source
 
-    def gen_ranked(self):
+    def gen_all_graph(self):
         '''
         Construct the entire graph and add the tier level for each node
         '''
-        for sp in os.listdir(PRODSUPP):
-            sp_dir = '/'.join([PRODSUPP,sp])
-            for v in os.listdir(sp_dir):
+        # for sp in os.listdir(PRODSUPP):
+        for sp in GemNode.list_supp('support', self.source):
+            sp_dir = '/'.join(['support', sp])
+            for v in GemNode.list_supp(sp_dir, self.source):
                 node = '/'.join([sp,v])
                 # Skip to next node if it exists in the list
                 if node in self.supp_nodes.keys():
                     continue
                 # Generate node
                 self.supp_nodes[node] = GemNode(node)
-                self.supp_nodes[node].get_prod_deps(PRODSUPP)
+                self.supp_nodes[node].get_prod_deps(self.source)
                 # If node has no dependencies, skip to next node. This is done
                 # in order to catch the Tier 0 nodes
                 if not(self.supp_nodes[node].prod_deps):
                     continue
                 # If node has dependencies, generate the whole branch
                 self._gen_branches(node)
+        return
 
-    def gen_ioc_ranked(self, ioc_name):
-        '''
-        Generate graph for a branch spawning from an ioc
-        '''
-        self.supp_nodes[ioc_name] = GemNode(ioc_name)
-        self.supp_nodes[ioc_name].get_prod_deps(WORKIOC)
-        if not(self.supp_nodes[ioc_name].prod_deps):
-            raise UserWarning('IOC has no dependencies... kinda sus')
-        for ioc_d in self.supp_nodes[ioc_name].prod_deps:
-            if not(ioc_d in self.supp_nodes.keys()):
-                self.supp_nodes[ioc_d] = GemNode(ioc_d)
-                self.supp_nodes[ioc_d].get_prod_deps(PRODSUPP)
-            if not(self.supp_nodes[ioc_d].prod_deps):
-                continue
-            self._gen_branches(ioc_d)
-        max_tier = max([self.supp_nodes[n].tier for n in self.supp_nodes])
-        self.supp_nodes[ioc_name].tier = max_tier + 1
-
-    def gen_ioc_diag(self, ioc_name):
+    def gen_ioc_graph(self, ioc_name):
         '''
         Generate interdependency graph for the support packages of an ioc
         '''
-        i = 1
         self.ioc_nodes[ioc_name] = GemNode(ioc_name, 'ioc')
         self.ioc_nodes[ioc_name].get_prod_deps(WORKIOC)
         # self.ioc_nodes[ioc_name].get_deps(self.source)
         if not(self.ioc_nodes[ioc_name].prod_deps):
             raise UserWarning('IOC has no dependencies... kinda sus')
+        # Since getting the info from svn is so slow, I added a progress bar.
+        # The following are variables initilized for the progress bar
+        i = [0]
+        start = [True]
+        nu_deps = [len(self.ioc_nodes[ioc_name].prod_deps)]
+        # The progress bar only shows up when the source is svn.
+        if self.source == 'svn':
+            threading.Thread(target=progress_mon,
+                             kwargs={'tot':nu_deps,
+                                     'acc':i,
+                                     'name':ioc_name,
+                                     'run_flag':start}).start()
+        # Generate the branch for each dependecy
         for ioc_d in self.ioc_nodes[ioc_name].prod_deps:
-            nu_deps = len(self.ioc_nodes[ioc_name].prod_deps)
-            sys.stdout.write('\rGenerating dependency ({1:2d}/{0:2d})'.format(nu_deps, i))
-            i += 1
+            i[0] += 1
             if not(ioc_d in self.supp_nodes.keys()):
                 self.supp_nodes[ioc_d] = GemNode(ioc_d)
                 self.supp_nodes[ioc_d].get_deps(self.source)
-                # self.supp_nodes[ioc_d].get_prod_deps(PRODSUPP)
             if not(self.supp_nodes[ioc_d].prod_deps):
                 continue
             self._gen_branches(ioc_d)
-        # sys.stdout.write('\rGenerating dependency({0:2d}/{0:2d}) Done!\n'.format(nu_deps))
-        sys.stdout.write('\nDone!\n')
+        # Flag the progress bar to stop
+        start[0] = False
+        # Wait until Done! is printed on screen to continue
+        if self.source == 'svn':
+            while not(start[0]):
+                time.sleep(0.001)
+        # Set tier level of all IOC nodes to be highest supp node tier +1
         max_tier = max([self.supp_nodes[n].tier for n in self.supp_nodes])
         for i in self.ioc_nodes:
             self.ioc_nodes[i].tier = max_tier + 1
+        return
 
-    def gen_supp_diag(self, supp_name):
+    def gen_supp_graph(self, supp_name):
         '''
         Generate dependency graph for a support module
         '''
         self.supp_nodes[supp_name] = GemNode(supp_name)
         self.supp_nodes[supp_name].get_deps(self.source)
         self._gen_branches(supp_name)
+        return
 
-    def gen_unranked(self):
+    def gen_all_unranked(self):
         '''
         Spawn all nodes without ranking them
         '''
-        for sp in os.listdir(PRODSUPP):
-            sp_dir = '/'.join([PRODSUPP,sp])
-            for v in os.listdir(sp_dir):
+        for sp in GemNode.list_supp('support', self.source):
+            sp_dir = '/'.join(['support', sp])
+            for v in GemNode.list_supp(sp_dir, self.source):
                 node = '/'.join([sp,v])
                 self.supp_nodes[node] = GemNode(node)
-                self.supp_nodes[node].get_prod_deps(PRODSUPP)
+                self.supp_nodes[node].get_prod_deps(self.source)
+        return
 
-    def set_tiers(self, dependant):
+    def _set_tiers(self, dependant):
         '''
         Set tiers for a branch that ends in the 'dependant' node
         '''
@@ -131,7 +152,8 @@ class SuppGraph:
             # If dep node doesn't exist, create it
             if not(dep in self.supp_nodes.keys()):
                 self.supp_nodes[dep] = GemNode(dep)
-                self.supp_nodes[dep].get_prod_deps(PRODSUPP)
+                self.supp_nodes[dep].get_deps(self.source)
+                # self.supp_nodes[dep].get_prod_deps(PRODSUPP)
             # Start traveling down until level 1 or visited node is reached
             self._gen_branches(dep)
             # Returning here means a Tier 1 node was reached or all
@@ -148,14 +170,22 @@ class SuppGraph:
         '''
         Print all nodes in the graph
         '''
-        for n in self.supp_nodes:
-            print(self.supp_nodes[n])
+        if self.ioc_nodes:
+            for ni in self.ioc_nodes:
+                print(self.ioc_nodes[ni])
+        for ns in self.supp_nodes:
+            print(self.supp_nodes[ns])
+        return
 
     def print_node(self, node_name):
         '''
         Print single node
         '''
+        if node_name in self.ioc_nodes.keys():
+            print(self.ioc_nodes[node_name])
+            return
         print(self.supp_nodes[node_name])
+        return
 
 if __name__ == '__main__':
     graph = SuppGraph()
