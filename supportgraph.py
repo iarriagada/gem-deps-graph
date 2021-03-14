@@ -62,8 +62,8 @@ class SuppGraph:
         Generate interdependency graph for the support packages of an ioc
         '''
         self.ioc_nodes[ioc_name] = GemNode(ioc_name, 'ioc')
-        self.ioc_nodes[ioc_name].get_prod_deps(WORKIOC)
-        # self.ioc_nodes[ioc_name].get_deps(self.source)
+        # self.ioc_nodes[ioc_name].get_prod_deps(WORKIOC)
+        self.ioc_nodes[ioc_name].get_deps(self.source)
         if not(self.ioc_nodes[ioc_name].prod_deps):
             raise UserWarning('IOC has no dependencies... kinda sus')
         # Since getting the info from svn is so slow, I added a progress bar.
