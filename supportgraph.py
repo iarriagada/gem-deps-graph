@@ -20,9 +20,9 @@ def progress_mon(tot, acc, name, run_flag):
         time.sleep(0.001)
     sys.stdout.write(mess(tot[0],acc[0]))
     sys.stdout.write('\nDone!\n')
-    # Since getting the info from svn is so slow, I don't mind adding 1 ms to
-    # the whole process
     # Set the flag to True in order for the main thread to continue
+    # (Since getting the info from svn is so slow, I don't mind adding 1 ms to
+    # the whole process)
     run_flag[0] = True
 
 class SuppGraph:
@@ -138,7 +138,7 @@ class SuppGraph:
     def _gen_branches(self, dependant):
         '''
         Recursive method that generates a graph branch starting with
-        'dependant', setting the tier level for each node as it's generated
+        'dependant', setting the tier level for each node as it is generated
         '''
         # If node tier level > 0, it means it has been visited.
         if self.supp_nodes[dependant].tier > 0:
@@ -187,6 +187,7 @@ class SuppGraph:
         print(self.supp_nodes[node_name])
         return
 
+# Main body of the script for testing purposes
 if __name__ == '__main__':
     graph = SuppGraph()
 
@@ -196,14 +197,7 @@ if __name__ == '__main__':
     # graph.set_tiers('tcslib/1-0-23')
 
     # Test generating graph and tiers all at once
-    # graph.gen_ranked()
-    graph.gen_ioc_ranked('gis/cwrap-chans')
+    # graph.gen_ioc_ranked('gis/cwrap-chans')
 
-    graph.print_nodes()
-    # graph.tier_sorter()
-    # for n in graph.nodes:
-        # print(n.keys())
-    # for t in graph.tiers:
-        # print('Tier {}:'.format(t))
-        # print(graph.tiers[t])
+    # graph.print_nodes()
 
