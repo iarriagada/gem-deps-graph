@@ -22,6 +22,7 @@ RELEASE_LOC = 'configure/RELEASE'
 # Filter to handle commented lines
 CMNT_FILT = re.compile(r'^[ ]*[^#]+')
 
+# TODO: This function has been marked for deletion... dum dum dum
 def extract_deps(app_root_path, type_var='(P|S)'):
     '''
     Extract dependencies list from configure/RELEASE file
@@ -44,7 +45,7 @@ def run_svn_cmd(cmd, arg):
     cmd_exec = sp.run([cmd+arg], shell=True,
                      stdout=sp.PIPE, stderr=sp.PIPE,
                      encoding='utf-8')
-    # If svn command returns an error, raise OS exception. kinda harsh
+    # If svn command returns an error, raise OS exception. Kinda harsh, maybe
     if cmd_exec.stderr:
         raise OSError(cmd_exec.stderr)
     cmd_out = cmd_exec.stdout.split('\n')
@@ -74,6 +75,7 @@ class GemNode:
         deps_str = '\n'.join([deps_head,deps])
         return '\n'.join([name_str, tier_str, deps_str])
 
+    # TODO: This method should be erased
     def get_prod_deps(self, node_root):
         '''
         Get the list of dependencies for the node
